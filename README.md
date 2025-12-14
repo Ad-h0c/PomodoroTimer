@@ -16,9 +16,9 @@ A native macOS Pomodoro timer application with integrated todo list that lives i
 - **Auto-start Options**: Automatically transition between work and breaks
 - **Data Persistence**: Your todos and settings are saved automatically
 - **Keyboard Shortcuts**:
-  - `⌘Space` - Start/Pause Timer
-  - `⌘R` - Reset Timer
-  - `⌘S` - Skip Phase
+  - `⌘⌥↩︎` (Command + Return) - Start / Pause Timer
+  - `⌘⌥R` - Reset Timer
+  - `⌘⌥S` - Skip Phase
   - `⌘,` - Open Settings
   - `⌘Q` - Quit Application
 - **Task History**: View completed tasks organized by date with completion timestamps
@@ -52,7 +52,7 @@ PomodoroTimer/
 
 1. **Open the Project**
 
-   - Navigate to the `utodo` folder
+   - Navigate to the `PomodoroTimer` folder
    - Double-click `PomodoroTimer.xcodeproj` to open in Xcode
 
 2. **Build the App**
@@ -240,3 +240,26 @@ Here are ideas for enhancing the app:
 This is a vibe coded and personal project - feel free to use and modify as needed.
 
 Reported Issues and Pull Requests are welcome!
+
+## Download
+
+👉 [Download the latest macOS DMG](https://github.com/ad-h0c/PomodoroTimer/releases/latest)
+
+## Installing the App (DMG)
+
+1. Download the latest `PomodoroTimer.dmg` from the GitHub Releases page.
+2. Double-click the DMG file to open it.
+3. Drag `PomodoroTimer.app` into the `Applications` folder.
+4. Eject the DMG.
+
+### First Launch (Important)
+
+Because this app is not notarized with Apple (Developer ID), macOS may show a warning.
+
+To open the app the first time:
+
+- Right-click `PomodoroTimer.app`
+- Select **Open**
+- Click **Open** again in the dialog
+
+You only need to do this once.

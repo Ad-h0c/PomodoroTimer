@@ -250,7 +250,14 @@ Reported Issues and Pull Requests are welcome!
 1. Download the latest `PomodoroTimer.dmg` from the GitHub Releases page.
 2. Double-click the DMG file to open it.
 3. Drag `PomodoroTimer.app` into the `Applications` folder.
-4. Eject the DMG.
+4. Eject the DMG.'
+
+## Install with Homebrew
+
+```bash
+brew tap ad-h0c/pomodorotimer
+brew install --cask pomodorotimer
+```
 
 ### First Launch (Important)
 

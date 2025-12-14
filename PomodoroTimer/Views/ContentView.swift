@@ -15,7 +15,7 @@ struct ContentView: View {
         }
         .frame(width: 340, height: 500)
         .onAppear {
-            NSApp.activate(ignoringOtherApps: true)
+            bringPopoverToFront()
         }
     }
 
@@ -173,6 +173,13 @@ struct ContentView: View {
         if !trimmed.isEmpty {
             timer.addTodo(trimmed)
             newTodoText = ""
+        }
+    }
+
+    private func bringPopoverToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let statusWindow = NSApp.windows.first(where: { $0.level == .statusBar && $0.isVisible }) {
+            statusWindow.makeKeyAndOrderFront(nil)
         }
     }
 }

@@ -1,13 +1,23 @@
 import SwiftUI
 import AppKit
 
+enum SettingsTab: String {
+    case timer, history, shortcuts, general, about
+}
+
+extension Notification.Name {
+    static let showSettingsTab = Notification.Name("showSettingsTab")
+}
+
 class SettingsWindowController {
     static let shared = SettingsWindowController()
     private var settingsWindow: NSWindow?
 
-    func showSettings(timer: PomodoroTimerModel) {
+    func showSettings(timer: PomodoroTimerModel, tab: SettingsTab? = nil) {
         if settingsWindow == nil {
-            createWindow(timer: timer)
+            createWindow(timer: timer, initialTab: tab)
+        } else if let tab {
+            NotificationCenter.default.post(name: .showSettingsTab, object: nil, userInfo: ["tab": tab.rawValue])
         }
 
         guard let window = settingsWindow else { return }
@@ -16,12 +26,13 @@ class SettingsWindowController {
             window.deminiaturize(nil)
         }
 
-        // Just bring window to front - no explicit app activation needed for MenuBarExtra
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func createWindow(timer: PomodoroTimerModel) {
-        let settingsView = SettingsView()
+    private func createWindow(timer: PomodoroTimerModel, initialTab: SettingsTab?) {
+        let settingsView = SettingsView(initialTab: initialTab)
             .environmentObject(timer)
 
         let hostingController = NSHostingController(rootView: settingsView)
@@ -38,6 +49,12 @@ class SettingsWindowController {
         }
 
         settingsWindow = window
+
+        if let tab = initialTab {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .showSettingsTab, object: nil, userInfo: ["tab": tab.rawValue])
+            }
+        }
     }
 }
 
@@ -78,8 +95,7 @@ struct PomodoroTimerApp: App {
             // Replace Help menu to show About panel
             CommandGroup(replacing: .help) {
                 Button("About PomodoroTimer") {
-                    NSApp.orderFrontStandardAboutPanel(nil)
-                    NSApp.activate(ignoringOtherApps: true)
+                    SettingsWindowController.shared.showSettings(timer: pomodoroTimer, tab: .about)
                 }
                 .keyboardShortcut("?", modifiers: [.command, .shift])
             }

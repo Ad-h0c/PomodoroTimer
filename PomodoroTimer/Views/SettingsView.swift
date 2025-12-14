@@ -3,7 +3,11 @@ import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
-    @State private var selectedTab = 0
+    @State private var selectedTab: SettingsTab
+
+    init(initialTab: SettingsTab? = nil) {
+        _selectedTab = State(initialValue: initialTab ?? .timer)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,30 +21,41 @@ struct SettingsView: View {
                     .tabItem {
                         Label("Timer", systemImage: "timer")
                     }
+                    .tag(SettingsTab.timer)
 
                 HistoryView()
                     .environmentObject(timer)
                     .tabItem {
                         Label("History", systemImage: "clock.arrow.circlepath")
                     }
+                    .tag(SettingsTab.history)
 
                 KeyboardShortcutsView()
                     .tabItem {
                         Label("Shortcuts", systemImage: "command")
                     }
+                    .tag(SettingsTab.shortcuts)
 
                 GeneralSettingsView()
                     .environmentObject(timer)
                     .tabItem {
                         Label("General", systemImage: "gear")
                     }
+                    .tag(SettingsTab.general)
 
                 AboutView()
                     .tabItem {
                         Label("About", systemImage: "info.circle")
                     }
+                    .tag(SettingsTab.about)
             }
             .padding(.horizontal, 1)
+            .onReceive(NotificationCenter.default.publisher(for: .showSettingsTab)) { note in
+                if let raw = note.userInfo?["tab"] as? String,
+                   let tab = SettingsTab(rawValue: raw) {
+                    selectedTab = tab
+                }
+            }
         }
         .frame(width: 600, height: 600)
         .background(TabViewFocusRemover())
@@ -290,6 +305,7 @@ struct TimerSettingsView: View {
 
 struct GeneralSettingsView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
+    @AppStorage("showDockIcon") private var showDockIcon = true
 
     var body: some View {
         ScrollView {
@@ -340,6 +356,39 @@ struct GeneralSettingsView: View {
 
                     Toggle("", isOn: $timer.soundEnabled)
                         .labelsHidden()
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(10)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                // Dock Icon Toggle
+                HStack(spacing: 12) {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 24))
+                        .foregroundColor(.blue)
+                        .frame(width: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Show Dock Icon")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Hide or show the app icon in the Dock")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $showDockIcon)
+                        .labelsHidden()
+                        .onChange(of: showDockIcon) { newValue in
+                            applyDockVisibility(newValue)
+                        }
+                        .onAppear {
+                            applyDockVisibility(showDockIcon)
+                        }
                 }
                 .padding(16)
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -433,6 +482,14 @@ struct GeneralSettingsView: View {
 
     private func clearCompletedTasks() {
         timer.clearCompletedTodos()
+    }
+
+    private func applyDockVisibility(_ show: Bool) {
+        NSApp.setActivationPolicy(show ? .regular : .accessory)
+        if let settingsWindow = NSApp.windows.first(where: { $0.title == "Settings" }) {
+            settingsWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 

@@ -15,6 +15,7 @@
 		A1000006000000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006000000000000001 /* SettingsView.swift */; };
 		A1000007000000000000001 /* MenuBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007000000000000001 /* MenuBarManager.swift */; };
 		A1000008000000000000001 /* KeyboardShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009000000000000001 /* KeyboardShortcutManager.swift */; };
+		A1000010000000000000001 /* FloatingTaskInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010000000000000001 /* FloatingTaskInputView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		A2000007000000000000001 /* MenuBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarManager.swift; sourceTree = "<group>"; };
 		A2000008000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000009000000000000001 /* KeyboardShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutManager.swift; sourceTree = "<group>"; };
+		A2000010000000000000001 /* FloatingTaskInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTaskInputView.swift; sourceTree = "<group>"; };
 		A3000001000000000000001 /* PomodoroTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PomodoroTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -74,6 +76,7 @@
 			children = (
 				A2000002000000000000001 /* ContentView.swift */,
 				A2000006000000000000001 /* SettingsView.swift */,
+				A2000010000000000000001 /* FloatingTaskInputView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -158,6 +161,7 @@
 				A1000006000000000000001 /* SettingsView.swift in Sources */,
 				A1000007000000000000001 /* MenuBarManager.swift in Sources */,
 				A1000008000000000000001 /* KeyboardShortcutManager.swift in Sources */,
+				A1000010000000000000001 /* FloatingTaskInputView.swift in Sources */,
 			);
 		};
 /* End PBXSourcesBuildPhase section */

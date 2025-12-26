@@ -66,6 +66,7 @@ struct PomodoroTimerApp: App {
         let timer = PomodoroTimerModel()
         _pomodoroTimer = StateObject(wrappedValue: timer)
         KeyboardShortcutManager.shared.pomodoroTimer = timer
+        FloatingTaskInputController.shared.timer = timer
     }
 
     var body: some Scene {

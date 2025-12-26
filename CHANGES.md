@@ -1,5 +1,47 @@
 # Recent Updates
 
+---
+
+## Version 1.1.0
+
+### New Features
+
+#### Quick Add Floating Input (`⌘⌥N`)
+- Spotlight-like floating task input window
+- Draggable anywhere on screen
+- Always on top for quick task capture
+- Stays open for adding multiple tasks
+- Press `Esc` to close
+
+#### Cleaner Task List
+- Completed tasks auto-hide from menu bar
+- "History" link appears when completed tasks exist
+- View all completed tasks in Settings → History
+
+#### Task Input Validation
+- 100 character limit with visual warning
+- Shows remaining character count when approaching limit
+
+#### Customizable Shortcuts
+- All shortcuts now customizable in Settings → Shortcuts
+- Quick Add shortcut added to settings panel
+
+### Bug Fixes
+
+#### Fixed App Unresponsive on Restart
+- Fixed critical bug where app became unresponsive when restarting with accessibility permissions already granted
+- Delayed keyboard monitor initialization until app is fully launched
+
+#### Improved Accessibility Permission Handling
+- Auto-detects permission changes while running
+- Global shortcuts enable automatically when permissions granted
+- Proper cleanup when permissions revoked
+- Added app activation observer for permission checks
+
+---
+
+## Version 1.0.0
+
 ## Bug Fixes
 
 ### 1. Plus Button Now Works

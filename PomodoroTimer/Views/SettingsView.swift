@@ -498,11 +498,13 @@ struct KeyboardShortcutsView: View {
     @State private var editingStartPause = false
     @State private var editingReset = false
     @State private var editingSkip = false
+    @State private var editingQuickAdd = false
 
     private enum ShortcutTarget {
         case startPause
         case reset
         case skip
+        case quickAdd
     }
 
     var body: some View {
@@ -541,6 +543,17 @@ struct KeyboardShortcutsView: View {
                         placeholder: "⌘F",
                         color: .purple,
                         onBeginEditing: { beginEditing(.skip) }
+                    )
+
+                    shortcutCard(
+                        icon: "plus.circle.fill",
+                        title: "Quick Add Task",
+                        subtitle: "Open floating task input",
+                        shortcut: $manager.quickAddShortcut,
+                        isEditing: $editingQuickAdd,
+                        placeholder: "⌘⌥N",
+                        color: .green,
+                        onBeginEditing: { beginEditing(.quickAdd) }
                     )
                 }
 
@@ -601,6 +614,9 @@ struct KeyboardShortcutsView: View {
             updateEditingState()
         }
         .onChange(of: editingSkip) { _, _ in
+            updateEditingState()
+        }
+        .onChange(of: editingQuickAdd) { _, _ in
             updateEditingState()
         }
     }
@@ -700,10 +716,12 @@ struct KeyboardShortcutsView: View {
         manager.startPauseShortcut = .defaultStartPause
         manager.resetShortcut = .defaultReset
         manager.skipShortcut = .defaultSkip
+        manager.quickAddShortcut = .defaultQuickAdd
 
         editingStartPause = false
         editingReset = false
         editingSkip = false
+        editingQuickAdd = false
         updateEditingState()
     }
 
@@ -711,6 +729,7 @@ struct KeyboardShortcutsView: View {
         editingStartPause = target == .startPause
         editingReset = target == .reset
         editingSkip = target == .skip
+        editingQuickAdd = target == .quickAdd
         updateEditingState()
     }
 
@@ -720,7 +739,7 @@ struct KeyboardShortcutsView: View {
     }
 
     private func updateEditingState() {
-        manager.isEditingShortcut = editingStartPause || editingReset || editingSkip
+        manager.isEditingShortcut = editingStartPause || editingReset || editingSkip || editingQuickAdd
     }
 }
 

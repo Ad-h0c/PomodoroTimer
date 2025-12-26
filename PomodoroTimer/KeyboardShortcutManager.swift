@@ -61,6 +61,7 @@ class KeyboardShortcutManager: ObservableObject {
         static let defaultStartPause = Shortcut(key: "↩", keyCode: 36, command: true, option: true)
         static let defaultReset = Shortcut(key: "r", keyCode: 15, command: true, option: true)
         static let defaultSkip = Shortcut(key: "s", keyCode: 3, command: true, option: true)
+        static let defaultQuickAdd = Shortcut(key: "n", keyCode: 45, command: true, option: true)
 
         private static func extractKeyInfo(from event: NSEvent) -> (key: String, keyCode: UInt16) {
             if let characters = event.charactersIgnoringModifiers, !characters.isEmpty {
@@ -117,6 +118,8 @@ class KeyboardShortcutManager: ObservableObject {
     @Published var isEditingShortcut = false
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var permissionCheckTimer: Timer?
+    private var lastPermissionState: Bool = false
 
     @Published var startPauseShortcut: Shortcut {
         didSet { saveShortcut(startPauseShortcut, forKey: startPauseKey) }
@@ -127,11 +130,15 @@ class KeyboardShortcutManager: ObservableObject {
     @Published var skipShortcut: Shortcut {
         didSet { saveShortcut(skipShortcut, forKey: skipKey) }
     }
+    @Published var quickAddShortcut: Shortcut {
+        didSet { saveShortcut(quickAddShortcut, forKey: quickAddKey) }
+    }
 
     private let defaults = UserDefaults.standard
     private let startPauseKey = "shortcut_startPause_v2"
     private let resetKey = "shortcut_reset_v2"
     private let skipKey = "shortcut_skip_v2"
+    private let quickAddKey = "shortcut_quickAdd_v2"
     private let legacyStartPauseKey = "shortcut_startPause"
     private let legacyResetKey = "shortcut_reset"
     private let legacySkipKey = "shortcut_skip"
@@ -155,10 +162,23 @@ class KeyboardShortcutManager: ObservableObject {
             legacyKey: legacySkipKey,
             fallback: .defaultSkip
         )
+        quickAddShortcut = Self.loadShortcut(
+            from: defaults,
+            newKey: quickAddKey,
+            legacyKey: nil,
+            fallback: .defaultQuickAdd
+        )
 
-        // Check accessibility permissions before setting up global shortcuts
+        // Store initial permission state
+        lastPermissionState = AXIsProcessTrusted()
         checkAccessibilityPermissions()
-        setupKeyboardMonitoring()
+
+        // Delay keyboard monitoring setup until app is fully launched
+        // This prevents blocking during initialization
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.setupKeyboardMonitoring()
+            self?.startPermissionPolling()
+        }
     }
 
     @Published var needsAccessibilityPermission = false
@@ -175,6 +195,57 @@ class KeyboardShortcutManager: ObservableObject {
         }
     }
 
+    private func startPermissionPolling() {
+        // Poll every 2 seconds to detect permission changes
+        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.handlePermissionChange()
+        }
+
+        // Also check when app becomes active
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handlePermissionChange()
+        }
+    }
+
+    private func handlePermissionChange() {
+        let currentState = AXIsProcessTrusted()
+
+        // Only act if the permission state actually changed
+        guard currentState != lastPermissionState else { return }
+
+        lastPermissionState = currentState
+
+        // Always remove existing monitor first when state changes
+        removeGlobalMonitor()
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if currentState {
+                // Permission was just granted - set up global monitor
+                print("✅ Accessibility permission granted - enabling global shortcuts")
+                self.needsAccessibilityPermission = false
+                self.setupGlobalMonitor()
+            } else {
+                // Permission was revoked
+                print("⚠️ Accessibility permission revoked - global shortcuts disabled")
+                self.needsAccessibilityPermission = true
+            }
+        }
+    }
+
+    private func removeGlobalMonitor() {
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMonitor = nil
+            print("🔄 Global monitor removed")
+        }
+    }
+
     func requestAccessibilityPermissions() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
@@ -186,6 +257,8 @@ class KeyboardShortcutManager: ObservableObject {
     }
 
     deinit {
+        permissionCheckTimer?.invalidate()
+        permissionCheckTimer = nil
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -211,13 +284,17 @@ class KeyboardShortcutManager: ObservableObject {
     }
 
     func setupGlobalMonitor() {
-        // Remove existing monitor if any
-        if let monitor = globalMonitor {
-            NSEvent.removeMonitor(monitor)
+        // Double-check permissions before setting up
+        guard AXIsProcessTrusted() else {
+            print("⚠️ Cannot setup global monitor - no accessibility permission")
+            needsAccessibilityPermission = true
+            return
         }
 
+        // Remove existing monitor if any
+        removeGlobalMonitor()
+
         // Global monitor - works system-wide even when app doesn't have focus
-        // Only process events that could potentially be our shortcuts
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return }
 
@@ -227,8 +304,13 @@ class KeyboardShortcutManager: ObservableObject {
             }
         }
 
-        needsAccessibilityPermission = false
-        print("✅ Global shortcuts enabled")
+        if globalMonitor != nil {
+            needsAccessibilityPermission = false
+            print("✅ Global shortcuts enabled")
+        } else {
+            needsAccessibilityPermission = true
+            print("⚠️ Failed to create global monitor")
+        }
     }
 
     private func couldBeShortcut(_ event: NSEvent) -> Bool {
@@ -241,7 +323,8 @@ class KeyboardShortcutManager: ObservableObject {
         let keyCode = event.keyCode
         return keyCode == startPauseShortcut.keyCode ||
                keyCode == resetShortcut.keyCode ||
-               keyCode == skipShortcut.keyCode
+               keyCode == skipShortcut.keyCode ||
+               keyCode == quickAddShortcut.keyCode
     }
 
     private func handleLocal(event: NSEvent) -> NSEvent? {
@@ -290,6 +373,13 @@ class KeyboardShortcutManager: ObservableObject {
             return true
         }
 
+        if matches(event, shortcut: quickAddShortcut) {
+            DispatchQueue.main.async {
+                FloatingTaskInputController.shared.toggle()
+            }
+            return true
+        }
+
         return false
     }
 
@@ -318,13 +408,14 @@ class KeyboardShortcutManager: ObservableObject {
         }
     }
 
-    private static func loadShortcut(from defaults: UserDefaults, newKey: String, legacyKey: String, fallback: Shortcut) -> Shortcut {
+    private static func loadShortcut(from defaults: UserDefaults, newKey: String, legacyKey: String?, fallback: Shortcut) -> Shortcut {
         if let data = defaults.data(forKey: newKey),
            let shortcut = try? JSONDecoder().decode(Shortcut.self, from: data) {
             return shortcut
         }
 
-        if let legacyValue = defaults.string(forKey: legacyKey), !legacyValue.isEmpty {
+        if let legacyKey = legacyKey,
+           let legacyValue = defaults.string(forKey: legacyKey), !legacyValue.isEmpty {
             var legacyShortcut = fallback
             legacyShortcut.key = legacyValue
             return legacyShortcut

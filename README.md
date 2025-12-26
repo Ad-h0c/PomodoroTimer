@@ -51,14 +51,21 @@ You only need to do this once. After this, the app will open normally.
   - Edit tasks by double-clicking or using the edit button
   - Delete tasks with the trash button (appears on hover)
   - Mark tasks as complete/incomplete
+  - Completed tasks auto-hide from menu bar (visible in History)
+  - 100 character limit with warning to keep tasks concise
+- **Quick Add Floating Input**: Press `⌘⌥N` to open a Spotlight-like floating input
+  - Always on top, draggable anywhere on screen
+  - Add multiple tasks quickly without opening the menu bar
+  - Press `Esc` to close
 - **Customizable Durations**: Adjust focus time, short breaks, and long breaks
 - **Notifications**: Get notified when sessions complete
 - **Auto-start Options**: Automatically transition between work and breaks
 - **Data Persistence**: Your todos and settings are saved automatically
-- **Keyboard Shortcuts**:
-  - `⌘⌥↩︎` (Command + Return) - Start / Pause Timer
+- **Keyboard Shortcuts** (all customizable in Settings):
+  - `⌘⌥↩︎` (Command + Option + Return) - Start / Pause Timer
   - `⌘⌥R` - Reset Timer
   - `⌘⌥S` - Skip Phase
+  - `⌘⌥N` - Quick Add Task (floating input)
   - `⌘,` - Open Settings
   - `⌘Q` - Quit Application
 - **Task History**: View completed tasks organized by date with completion timestamps
@@ -107,6 +114,12 @@ Completed tasks remain in your history until you delete them from the main task 
 
 - Go to System Settings → Notifications
 - Find "PomodoroTimer" and enable notifications
+
+### Global keyboard shortcuts don't work
+
+- Go to System Settings → Privacy & Security → Accessibility
+- Make sure PomodoroTimer is enabled
+- If already enabled, try toggling it off and on again
 
 ### App doesn't respond
 

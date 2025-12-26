@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
     @Environment(\.openSettings) private var openSettings
     @State private var newTodoText = ""
+    private let maxTaskLength = 100
 
     var body: some View {
         VStack(spacing: 0) {
@@ -95,13 +96,24 @@ struct ContentView: View {
                 Text("\(timer.todos.filter { !$0.isCompleted }.count) active")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if timer.todos.contains(where: { $0.isCompleted }) {
+                    Button(action: {
+                        SettingsWindowController.shared.showSettings(timer: timer, tab: .history)
+                    }) {
+                        Text("History")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("View completed tasks (⌘⌥H)")
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(timer.todos) { todo in
+                    ForEach(timer.todos.filter { !$0.isCompleted }) { todo in
                         TodoRowView(todo: todo)
                             .environmentObject(timer)
                     }
@@ -109,21 +121,34 @@ struct ContentView: View {
             }
             .frame(maxHeight: 200)
 
-            HStack(spacing: 8) {
-                Button(action: {
-                    addTodo()
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-
-                TextField("Add a task...", text: $newTodoText)
-                    .textFieldStyle(.plain)
-                    .onSubmit {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Button(action: {
                         addTodo()
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(newTodoText.count > maxTaskLength ? .secondary : .accentColor)
+                            .font(.system(size: 16))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(newTodoText.count > maxTaskLength)
+
+                    TextField("Add a task...", text: $newTodoText)
+                        .textFieldStyle(.plain)
+                        .onSubmit {
+                            addTodo()
+                        }
+                }
+
+                if newTodoText.count > maxTaskLength {
+                    Text("Keep it short – clear tasks get done faster (\(newTodoText.count)/\(maxTaskLength))")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                } else if newTodoText.count > maxTaskLength - 20 && newTodoText.count <= maxTaskLength {
+                    Text("\(maxTaskLength - newTodoText.count) characters left")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -170,7 +195,7 @@ struct ContentView: View {
 
     private func addTodo() {
         let trimmed = newTodoText.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty {
+        if !trimmed.isEmpty && trimmed.count <= maxTaskLength {
             timer.addTodo(trimmed)
             newTodoText = ""
         }

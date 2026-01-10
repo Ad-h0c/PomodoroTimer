@@ -8,6 +8,11 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Undo task completion banner
+            if let completed = timer.recentlyUncompletedTodo {
+                undoCompletionBanner(task: completed)
+            }
+
             timerSection
             Divider()
             todoSection
@@ -20,12 +25,31 @@ struct ContentView: View {
         }
     }
 
-    private func toggleTimer() {
-        if timer.isRunning {
-            timer.pauseTimer()
-        } else {
-            timer.startTimer()
+    private func undoCompletionBanner(task: TodoItem) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+
+            Text("Completed: \(task.text)")
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer()
+
+            Button(action: {
+                timer.undoTaskCompletion()
+            }) {
+                Text("Undo")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .focusable(false)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.green.opacity(0.1))
     }
 
     private var timerSection: some View {
@@ -38,11 +62,30 @@ struct ContentView: View {
                 .font(.system(size: 56, weight: .thin, design: .rounded))
                 .monospacedDigit()
 
+            // Show active task indicator when timer running
+            if timer.isRunning, let activeId = timer.activeTaskId,
+               let activeTask = timer.todos.first(where: { $0.id == activeId }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "target")
+                        .font(.caption)
+                    Text(activeTask.text)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(6)
+            }
+
             HStack(spacing: 12) {
                 Button(action: {
                     if timer.isRunning {
                         timer.pauseTimer()
                     } else {
+                        // Just start timer directly - use keyboard shortcut for task picker
                         timer.startTimer()
                     }
                 }) {
@@ -51,7 +94,8 @@ struct ContentView: View {
                         .symbolRenderingMode(.hierarchical)
                 }
                 .buttonStyle(.plain)
-                .help(timer.isRunning ? "Pause" : "Start")
+                .focusable(false)
+                .help(timer.isRunning ? "Pause" : "Start (use shortcut for task selection)")
 
                 Button(action: {
                     timer.resetTimer()
@@ -61,6 +105,7 @@ struct ContentView: View {
                         .symbolRenderingMode(.hierarchical)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .help("Reset")
 
                 Button(action: {
@@ -71,6 +116,7 @@ struct ContentView: View {
                         .symbolRenderingMode(.hierarchical)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .help("Skip")
             }
             .foregroundColor(.accentColor)
@@ -105,6 +151,7 @@ struct ContentView: View {
                             .foregroundColor(.accentColor)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .help("View completed tasks (⌘⌥H)")
                 }
             }
@@ -131,6 +178,7 @@ struct ContentView: View {
                             .font(.system(size: 16))
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .disabled(newTodoText.count > maxTaskLength)
 
                     TextField("Add a task...", text: $newTodoText)
@@ -168,6 +216,7 @@ struct ContentView: View {
                 .padding(4)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .foregroundColor(.secondary)
             .contentShape(Rectangle())
             .help("Settings (⌘,)")
@@ -184,6 +233,7 @@ struct ContentView: View {
                 .padding(4)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .foregroundColor(.secondary)
             .contentShape(Rectangle())
             .help("Quit (⌘Q)")
@@ -216,6 +266,8 @@ struct TodoRowView: View {
     @State private var isEditing = false
     @State private var editText = ""
 
+    private let maxTaskLength = 100
+
     var body: some View {
         HStack(spacing: 12) {
             Button(action: {
@@ -226,28 +278,57 @@ struct TodoRowView: View {
                     .foregroundColor(todo.isCompleted ? .green : .secondary)
             }
             .buttonStyle(.plain)
+            .focusable(false)
 
             if isEditing {
-                TextField("", text: $editText, onCommit: {
-                    saveEdit()
-                })
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .onAppear {
-                    editText = todo.text
-                }
-            } else {
-                Text(todo.text)
+                VStack(alignment: .leading, spacing: 2) {
+                    TextField("", text: $editText, onCommit: {
+                        saveEdit()
+                    })
+                    .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .strikethrough(todo.isCompleted)
-                    .foregroundColor(todo.isCompleted ? .secondary : .primary)
-                    .onTapGesture(count: 2) {
-                        isEditing = true
+                    .onAppear {
                         editText = todo.text
                     }
+
+                    if editText.trimmingCharacters(in: .whitespaces).count > maxTaskLength {
+                        Text("Keep it short - \(editText.trimmingCharacters(in: .whitespaces).count)/\(maxTaskLength)")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(todo.text)
+                        .font(.system(size: 13))
+                        .strikethrough(todo.isCompleted)
+                        .foregroundColor(todo.isCompleted ? .secondary : .primary)
+
+                    // Show time spent for active tasks
+                    if !todo.isCompleted && todo.timeSpent > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 9))
+                            Text(timer.formatTimeSpent(todo.timeSpent))
+                                .font(.system(size: 10))
+                        }
+                        .foregroundColor(.blue.opacity(0.7))
+                    }
+                }
+                .onTapGesture(count: 2) {
+                    isEditing = true
+                    editText = todo.text
+                }
             }
 
             Spacer()
+
+            // Show active task indicator
+            if timer.activeTaskId == todo.id && timer.isRunning {
+                Image(systemName: "target")
+                    .font(.system(size: 12))
+                    .foregroundColor(.blue)
+            }
 
             if isHovered && !isEditing {
                 HStack(spacing: 8) {
@@ -260,6 +341,7 @@ struct TodoRowView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
 
                     Button(action: {
                         if let index = timer.todos.firstIndex(where: { $0.id == todo.id }) {
@@ -271,6 +353,7 @@ struct TodoRowView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
             }
         }
@@ -284,7 +367,7 @@ struct TodoRowView: View {
 
     private func saveEdit() {
         let trimmed = editText.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty {
+        if !trimmed.isEmpty && trimmed.count <= maxTaskLength {
             timer.updateTodoText(todo, newText: trimmed)
         }
         isEditing = false

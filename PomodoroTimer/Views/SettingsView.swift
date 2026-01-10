@@ -306,6 +306,7 @@ struct TimerSettingsView: View {
 struct GeneralSettingsView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
     @AppStorage("showDockIcon") private var showDockIcon = true
+    @AppStorage("showTaskPicker") private var showTaskPicker = true
 
     var body: some View {
         ScrollView {
@@ -389,6 +390,30 @@ struct GeneralSettingsView: View {
                         .onAppear {
                             applyDockVisibility(showDockIcon)
                         }
+                }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .cornerRadius(10)
+
+                // Task Picker Toggle
+                HStack(spacing: 12) {
+                    Image(systemName: "checklist")
+                        .font(.system(size: 24))
+                        .foregroundColor(.green)
+                        .frame(width: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Task Selection on Start")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Choose which task to work on when starting a focus session")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $showTaskPicker)
+                        .labelsHidden()
                 }
                 .padding(16)
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -672,6 +697,9 @@ struct KeyboardShortcutsView: View {
                     onShortcutCaptured: { captured in
                         shortcut.wrappedValue = captured
                         isEditing.wrappedValue = false
+                    },
+                    onCancelCapture: {
+                        isEditing.wrappedValue = false
                     }
                 )
             )
@@ -746,17 +774,20 @@ struct KeyboardShortcutsView: View {
 struct KeyEventHandlerView: NSViewRepresentable {
     @Binding var isCapturing: Bool
     let onShortcutCaptured: (KeyboardShortcutManager.Shortcut) -> Void
+    var onCancelCapture: (() -> Void)?
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
         view.onShortcutCaptured = { shortcut in
             onShortcutCaptured(shortcut)
         }
+        view.onCancelCapture = onCancelCapture
         return view
     }
 
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.isCapturing = isCapturing
+        nsView.onCancelCapture = onCancelCapture
     }
 
     class KeyCaptureView: NSView {
@@ -770,6 +801,7 @@ struct KeyEventHandlerView: NSViewRepresentable {
             }
         }
         var onShortcutCaptured: ((KeyboardShortcutManager.Shortcut) -> Void)?
+        var onCancelCapture: (() -> Void)?
 
         override var acceptsFirstResponder: Bool { isCapturing }
 
@@ -797,6 +829,12 @@ struct KeyEventHandlerView: NSViewRepresentable {
                 return
             }
 
+            // Handle Escape key (keyCode 53) to cancel editing without saving
+            if event.keyCode == 53 {
+                onCancelCapture?()
+                return
+            }
+
             if let shortcut = KeyboardShortcutManager.Shortcut(event: event) {
                 onShortcutCaptured?(shortcut)
             }
@@ -810,6 +848,7 @@ struct KeyEventHandlerView: NSViewRepresentable {
 
 struct HistoryView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
+    @State private var hoveredTaskId: UUID? = nil
 
     var completedTodosByDate: [(String, [TodoItem])] {
         let completed = timer.todos.filter { $0.isCompleted && $0.completedAt != nil }
@@ -832,6 +871,11 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                // Undo banner
+                if let deleted = timer.recentlyDeletedTodo {
+                    undoBanner(task: deleted)
+                }
+
                 if completedTodosByDate.isEmpty {
                     emptyStateView
                 } else {
@@ -849,6 +893,33 @@ struct HistoryView: View {
             }
             .padding(20)
         }
+    }
+
+    private func undoBanner(task: TodoItem) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash.fill")
+                .foregroundColor(.orange)
+
+            Text("Deleted: \(task.text)")
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer()
+
+            Button(action: {
+                timer.undoDelete()
+            }) {
+                Text("Undo")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .focusable(false)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.15))
+        .cornerRadius(8)
     }
 
     private var emptyStateView: some View {
@@ -959,11 +1030,38 @@ struct HistoryView: View {
                 .font(.system(size: 16))
                 .foregroundColor(.green)
 
-            Text(task.text)
-                .font(.system(size: 14))
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.text)
+                    .font(.system(size: 14))
+                    .lineLimit(2)
+
+                // Show time spent if > 0
+                if task.timeSpent > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 10))
+                        Text(timer.formatTimeSpent(task.timeSpent))
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.blue.opacity(0.8))
+                }
+            }
 
             Spacer()
+
+            // Delete button on hover
+            if hoveredTaskId == task.id {
+                Button(action: {
+                    timer.deleteTodoByIdWithUndo(task.id)
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Delete task")
+            }
 
             if let completedAt = task.completedAt {
                 HStack(spacing: 4) {
@@ -978,6 +1076,10 @@ struct HistoryView: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            hoveredTaskId = hovering ? task.id : nil
+        }
     }
 
     private func formatTime(_ date: Date) -> String {
@@ -1018,7 +1120,7 @@ struct AboutView: View {
                         Text("Pomodoro Timer")
                             .font(.system(size: 28, weight: .bold))
 
-                        Text("Version 1.0.0")
+                        Text("Version 1.2.0")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
 

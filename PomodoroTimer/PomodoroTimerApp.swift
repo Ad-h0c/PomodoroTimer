@@ -67,6 +67,13 @@ struct PomodoroTimerApp: App {
         _pomodoroTimer = StateObject(wrappedValue: timer)
         KeyboardShortcutManager.shared.pomodoroTimer = timer
         FloatingTaskInputController.shared.timer = timer
+        FloatingTaskPickerController.shared.timer = timer
+
+        // Apply dock visibility setting on startup (deferred until app is ready)
+        DispatchQueue.main.async {
+            let showDock = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true
+            NSApp.setActivationPolicy(showDock ? .regular : .accessory)
+        }
     }
 
     var body: some Scene {

@@ -35,6 +35,10 @@ class PomodoroTimerModel: ObservableObject {
         }
     }
     @Published var todos: [TodoItem] = []
+    @Published var activeTaskId: UUID? = nil
+    @Published var recentlyDeletedTodo: TodoItem? = nil
+    @Published var shouldShowTaskPicker = false
+    @Published var recentlyUncompletedTodo: TodoItem? = nil
 
     @AppStorage("workDuration") var workDuration: Double = 25
     @AppStorage("shortBreakDuration") var shortBreakDuration: Double = 5
@@ -46,6 +50,7 @@ class PomodoroTimerModel: ObservableObject {
 
     private var timer: Timer?
     private let notificationCenter = UNUserNotificationCenter.current()
+    private var timeTrackingSaveCounter: Int = 0
 
     init() {
         requestNotificationPermission()
@@ -66,8 +71,29 @@ class PomodoroTimerModel: ObservableObject {
 
             if self.timeRemaining > 0 {
                 self.timeRemaining -= 1
+
+                // Track time for active task during work phase
+                if self.currentPhase == .work, let taskId = self.activeTaskId {
+                    self.addTimeToTask(taskId, seconds: 1)
+                }
             } else {
                 self.timerCompleted()
+            }
+        }
+    }
+
+    func setActiveTask(_ taskId: UUID?) {
+        activeTaskId = taskId
+    }
+
+    private func addTimeToTask(_ taskId: UUID, seconds: TimeInterval) {
+        if let index = todos.firstIndex(where: { $0.id == taskId }) {
+            todos[index].timeSpent += seconds
+            timeTrackingSaveCounter += 1
+            // Save every 60 seconds to avoid excessive writes
+            if timeTrackingSaveCounter >= 60 {
+                saveTodos()
+                timeTrackingSaveCounter = 0
             }
         }
     }
@@ -93,12 +119,18 @@ class PomodoroTimerModel: ObservableObject {
     private func timerCompleted() {
         pauseTimer()
 
+        // Save time tracking data when phase ends
+        saveTodos()
+        timeTrackingSaveCounter = 0
+
         playSound(named: "Hero")
         sendNotification(for: currentPhase)
 
         switch currentPhase {
         case .work:
             completedPomodoros += 1
+            // Clear active task when entering break
+            activeTaskId = nil
 
             if completedPomodoros % longBreakInterval == 0 {
                 currentPhase = .longBreak
@@ -165,13 +197,42 @@ class PomodoroTimerModel: ObservableObject {
     func toggleTodo(_ todo: TodoItem) {
         if let index = todos.firstIndex(where: { $0.id == todo.id }) {
             todos[index].isCompleted.toggle()
+
             if todos[index].isCompleted {
                 todos[index].completedAt = Date()
+                // Store for undo (only when completing, not uncompleting)
+                recentlyUncompletedTodo = todos[index]
+
+                // Clear undo after 10 seconds
+                let completedId = todo.id
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                    if self?.recentlyUncompletedTodo?.id == completedId {
+                        self?.recentlyUncompletedTodo = nil
+                    }
+                }
             } else {
                 todos[index].completedAt = nil
+                // Clear undo state if manually uncompleting
+                if recentlyUncompletedTodo?.id == todo.id {
+                    recentlyUncompletedTodo = nil
+                }
             }
             saveTodos()
         }
+    }
+
+    func undoTaskCompletion() {
+        guard let todo = recentlyUncompletedTodo,
+              let index = todos.firstIndex(where: { $0.id == todo.id }) else { return }
+        todos[index].isCompleted = false
+        todos[index].completedAt = nil
+        recentlyUncompletedTodo = nil
+        saveTodos()
+    }
+
+    func requestStartTimer() {
+        // This triggers the task picker in the UI
+        shouldShowTaskPicker = true
     }
 
     func updateTodoText(_ todo: TodoItem, newText: String) {
@@ -194,6 +255,54 @@ class PomodoroTimerModel: ObservableObject {
     func clearCompletedTodos() {
         todos.removeAll { $0.isCompleted }
         saveTodos()
+    }
+
+    func deleteTodoById(_ id: UUID) {
+        // Clear active task if it's being deleted
+        if activeTaskId == id {
+            activeTaskId = nil
+        }
+        todos.removeAll { $0.id == id }
+        saveTodos()
+    }
+
+    func deleteTodoByIdWithUndo(_ id: UUID) {
+        if let index = todos.firstIndex(where: { $0.id == id }) {
+            // Clear active task if it's being deleted
+            if activeTaskId == id {
+                activeTaskId = nil
+            }
+            recentlyDeletedTodo = todos[index]
+            todos.remove(at: index)
+            saveTodos()
+
+            // Clear undo after 10 seconds
+            let deletedId = id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                if self?.recentlyDeletedTodo?.id == deletedId {
+                    self?.recentlyDeletedTodo = nil
+                }
+            }
+        }
+    }
+
+    func undoDelete() {
+        guard let todo = recentlyDeletedTodo else { return }
+        todos.append(todo)
+        recentlyDeletedTodo = nil
+        saveTodos()
+    }
+
+    func formatTimeSpent(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if minutes > 0 {
+            return "\(minutes)m"
+        } else {
+            return "<1m"
+        }
     }
 
     private func saveTodos() {

@@ -295,12 +295,22 @@ class KeyboardShortcutManager: ObservableObject {
         removeGlobalMonitor()
 
         // Global monitor - works system-wide even when app doesn't have focus
+        // IMPORTANT: Dispatch to main thread immediately to avoid deadlocks
+        // The callback runs on a background thread, and accessing @Published
+        // properties from there can cause thread contention with the main thread
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self else { return }
+            // Capture event data we need before dispatching
+            let keyCode = event.keyCode
+            let modifierFlags = event.modifierFlags
+            let characters = event.charactersIgnoringModifiers
 
-            // Quick pre-filter: only process if event matches our shortcut keys
-            if self.couldBeShortcut(event) {
-                self.handleGlobal(event: event)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                // Now safely check and handle on main thread
+                if self.couldBeShortcutKeyCode(keyCode) {
+                    self.handleShortcutOnMain(keyCode: keyCode, modifierFlags: modifierFlags, characters: characters)
+                }
             }
         }
 
@@ -327,6 +337,14 @@ class KeyboardShortcutManager: ObservableObject {
                keyCode == quickAddShortcut.keyCode
     }
 
+    // Thread-safe keyCode check (doesn't access @Published properties that could cause contention)
+    private func couldBeShortcutKeyCode(_ keyCode: UInt16) -> Bool {
+        return keyCode == startPauseShortcut.keyCode ||
+               keyCode == resetShortcut.keyCode ||
+               keyCode == skipShortcut.keyCode ||
+               keyCode == quickAddShortcut.keyCode
+    }
+
     private func handleLocal(event: NSEvent) -> NSEvent? {
         let handled = handleShortcut(event: event)
         return handled ? nil : event
@@ -334,6 +352,69 @@ class KeyboardShortcutManager: ObservableObject {
 
     private func handleGlobal(event: NSEvent) {
         _ = handleShortcut(event: event)
+    }
+
+    // Handle shortcuts when called from global monitor (already on main thread)
+    private func handleShortcutOnMain(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags, characters: String?) {
+        // Skip shortcut handling while the user is editing a shortcut
+        if isEditingShortcut {
+            return
+        }
+
+        guard let key = characters?.lowercased(), !key.isEmpty else {
+            return
+        }
+
+        // Check and execute shortcuts - already on main thread, no need to dispatch again
+        if matchesShortcut(keyCode: keyCode, modifierFlags: modifierFlags, shortcut: resetShortcut) {
+            pomodoroTimer?.resetTimer()
+            return
+        }
+
+        if matchesShortcut(keyCode: keyCode, modifierFlags: modifierFlags, shortcut: skipShortcut) {
+            pomodoroTimer?.skipPhase()
+            return
+        }
+
+        if matchesShortcut(keyCode: keyCode, modifierFlags: modifierFlags, shortcut: startPauseShortcut) {
+            guard let timer = pomodoroTimer else { return }
+            if timer.isRunning {
+                timer.pauseTimer()
+            } else {
+                // Check if task picker should be shown
+                let showTaskPicker = UserDefaults.standard.object(forKey: "showTaskPicker") as? Bool ?? true
+                let hasActiveTasks = timer.todos.contains { !$0.isCompleted }
+
+                if showTaskPicker && timer.currentPhase == .work && hasActiveTasks {
+                    // Show floating task picker
+                    FloatingTaskPickerController.shared.show { taskId in
+                        timer.setActiveTask(taskId)
+                        timer.startTimer()
+                    }
+                } else {
+                    timer.startTimer()
+                }
+            }
+            return
+        }
+
+        if matchesShortcut(keyCode: keyCode, modifierFlags: modifierFlags, shortcut: quickAddShortcut) {
+            FloatingTaskInputController.shared.toggle()
+            return
+        }
+    }
+
+    // Helper to match shortcut using captured event data
+    private func matchesShortcut(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags, shortcut: Shortcut) -> Bool {
+        // Key match using keyCode
+        if let code = shortcut.keyCode, code != keyCode {
+            return false
+        }
+
+        let allowedFlags: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
+        let relevantFlags = modifierFlags.intersection(allowedFlags)
+        let shortcutFlags = shortcut.modifierFlags.intersection(allowedFlags)
+        return relevantFlags == shortcutFlags
     }
 
     private func handleShortcut(event: NSEvent) -> Bool {
@@ -367,7 +448,19 @@ class KeyboardShortcutManager: ObservableObject {
                 if timer.isRunning {
                     timer.pauseTimer()
                 } else {
-                    timer.startTimer()
+                    // Check if task picker should be shown
+                    let showTaskPicker = UserDefaults.standard.object(forKey: "showTaskPicker") as? Bool ?? true
+                    let hasActiveTasks = timer.todos.contains { !$0.isCompleted }
+
+                    if showTaskPicker && timer.currentPhase == .work && hasActiveTasks {
+                        // Show floating task picker
+                        FloatingTaskPickerController.shared.show { taskId in
+                            timer.setActiveTask(taskId)
+                            timer.startTimer()
+                        }
+                    } else {
+                        timer.startTimer()
+                    }
                 }
             }
             return true

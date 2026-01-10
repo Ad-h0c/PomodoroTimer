@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 
+// Custom panel that can become key window even when borderless
+private class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 class FloatingTaskInputController {
     static let shared = FloatingTaskInputController()
     private var window: NSPanel?
@@ -51,10 +57,10 @@ class FloatingTaskInputController {
 
         let hostingController = NSHostingController(rootView: contentView)
 
-        // Use NSPanel for floating utility window
-        let panel = NSPanel(
+        // Use borderless KeyablePanel for clean appearance with proper focus
+        let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 80),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -68,8 +74,6 @@ class FloatingTaskInputController {
         panel.hasShadow = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        // Allow the panel to become key even though it's non-activating style
         panel.becomesKeyOnlyIfNeeded = false
 
         // Make draggable like Spotlight
@@ -82,6 +86,7 @@ class FloatingTaskInputController {
 struct FloatingTaskInputView: View {
     @EnvironmentObject var timer: PomodoroTimerModel
     @State private var taskText = ""
+    @FocusState private var isInputFocused: Bool
     var onDismiss: () -> Void
     private let maxTaskLength = 100
 
@@ -94,6 +99,7 @@ struct FloatingTaskInputView: View {
             TextField("Quick add task... (Esc to close)", text: $taskText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
+                .focused($isInputFocused)
                 .onSubmit {
                     addTask()
                 }
@@ -114,6 +120,7 @@ struct FloatingTaskInputView: View {
                     .foregroundColor(isValidInput ? .accentColor : .secondary)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .disabled(!isValidInput)
         }
         .padding(.horizontal, 20)
@@ -128,6 +135,12 @@ struct FloatingTaskInputView: View {
                 .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
         )
         .padding(8)
+        .onAppear {
+            // Focus the input field when view appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isInputFocused = true
+            }
+        }
     }
 
     private var isValidInput: Bool {
